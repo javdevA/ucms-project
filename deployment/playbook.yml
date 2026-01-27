@@ -1,0 +1,35 @@
+---
+- name: Deploy UCMS Production Environment
+  hosts: ucms
+  become: yes
+  tasks:
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Pull latest UCMS images
+      docker_image:
+        name: ucms-app
+        source: local
+        build:
+          path: ..
+
+    - name: Deploy UCMS stack
+      docker_compose:
+        project_src: ..
+        state: present
+        recreate: always
+        pull: yes
+
+    - name: Verify UCMS API is accessible
+      uri:
+        url: http://localhost:8000
+        method: GET
+        status_code: 200
+      register: api_check
+
+    - name: Display deployment status
+      debug:
+        msg: "UCMS deployed successfully! API Status: {{ api_check.status }}"
