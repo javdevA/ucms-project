@@ -1,35 +1,40 @@
 ---
 - name: Deploy UCMS Production Environment
-  hosts: ucms
-  become: yes
+  hosts: localhost
+  connection: local
+  gather_facts: no
   tasks:
-    - name: Ensure Docker service is running
-      service:
-        name: docker
-        state: started
-        enabled: yes
+    - name: Build UCMS Docker image
+      shell: docker build -t ucms-app .
+      args:
+        chdir: "{{ playbook_dir }}/../"
+        creates: "{{ playbook_dir }}/../ucms-app.tar"
 
-    - name: Pull latest UCMS images
-      docker_image:
-        name: ucms-app
-        source: local
-        build:
-          path: ..
+    - name: Stop existing containers
+      shell: docker-compose down || true
+      args:
+        chdir: "{{ playbook_dir }}/../"
 
-    - name: Deploy UCMS stack
-      docker_compose:
-        project_src: ..
-        state: present
-        recreate: always
-        pull: yes
+    - name: Start UCMS stack
+      shell: docker-compose up -d
+      args:
+        chdir: "{{ playbook_dir }}/../"
 
-    - name: Verify UCMS API is accessible
+    - name: Wait for API
+      wait_for:
+        port: 8000
+        host: localhost
+        delay: 5
+        timeout: 30
+
+    - name: Test API endpoint
       uri:
         url: http://localhost:8000
         method: GET
         status_code: 200
-      register: api_check
+      register: result
 
-    - name: Display deployment status
+    - name: Show success
       debug:
-        msg: "UCMS deployed successfully! API Status: {{ api_check.status }}"
+        msg: "🎉 UCMS DEPLOYED SUCCESSFULLY! API Status: {{ result.status }} - Visit http://localhost:8000/docs"
+
